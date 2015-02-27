@@ -78,7 +78,7 @@ class Variable(Node):
         """
         # Observed state is represented as a 1-of-N variable
         # Could be 0.0 for sum-product, but log(0.0) = -inf so a tiny value is preferable for max-sum
-        self.observed_state[:] = 0.000001
+        self.observed_state[:] = 0.0000000000001
         self.observed_state[observed_state] = 1.0
 
     def set_latent(self):
@@ -106,6 +106,7 @@ class Variable(Node):
         marginal = np.ones(self.num_states)
         for neighbour in self.neighbours:
             marginal *= self.in_msgs[neighbour]
+        marginal *= self.observed_state
         if Z is None:
             Z = np.sum(marginal)
 
@@ -137,8 +138,7 @@ class Variable(Node):
                     msg *= received_msg
             else:
                 msg = received_msgs[0]
-        if msg.shape == ():
-            msg = np.array([float(msg)])
+        msg *= self.observed_state
         other.receive_msg(self, msg)
         self.pending.remove(other)
 
@@ -257,11 +257,19 @@ def test_sum_product():
     Fever.pending.add(f_1)
     Coughing.pending.add(f_3)
     Wheezing.pending.add(f_4)
+    
+    Bronchitis.set_observed(1)
+    Influenza.set_observed(0)
+
     sum_product(node_list)
 
     print_marginal(Influenza)
     print_marginal(Bronchitis)
     print_marginal(Coughing)
+    print_marginal(Wheezing)
+    print_marginal(Fever)
+    print_marginal(SoreThroat)
+    print_marginal(Smokes)
 
 
 if __name__ == '__main__':
