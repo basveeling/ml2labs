@@ -39,8 +39,10 @@ class Node(object):
         # Store the incomming message, replacing previous messages from the same node
         self.in_msgs[other] = msg
 
-        # TODO: add pending messages
-        # self.pending.update(...)
+        for neighbour in (set(self.neighbours) - {other}):
+            # heb ik van mijn ander andere neighbours alle messages binnen
+            if all(self.in_msgs[other_neighbour] for other_neighbour in (set(self.neighbours) - {other, neighbour})):
+                self.pending.add(neighbour)
     
     def __str__(self):
         # This is printed when using 'print node_instance'
@@ -96,8 +98,15 @@ class Variable(Node):
         Returns: marginal, Z. The first is a numpy array containing the normalized marginal distribution.
          Z is either equal to the input Z, or computed in this function (if Z=None was passed).
         """
-        # TODO: compute marginal
-        return None, Z
+        marginal = np.ones(self.num_states)
+        for neighbour in self.neighbours:
+            # TODO:
+            marginal = np.dot(marginal, self.in_msgs[neighbour])
+        if Z is None:
+            Z = np.sum(marginal)
+
+        marginal /= Z
+        return marginal, Z
     
     def send_sp_msg(self, other):
         """
@@ -165,36 +174,51 @@ class Factor(Node):
         # TODO: check deze implementatie als received_msgs klaar is
         a = np.multiply.reduce(np.ix_(*received_msgs))
         msg = np.tensordot(a, self.f, axes=(receiving_i, receiving_i))
-        other.receive_msg(self,msg)
+        other.receive_msg(self, msg)
 
     def send_ms_msg(self, other):
         # TODO: implement Factor -> Variable message for max-sum
         pass
 
-Influenza = Variable("Influenza", 2)
-Smokes = Variable("Smokes", 2)
-SoreThroat = Variable("SoreThroat", 2)
-Fever = Variable("Fever", 2)
-Bronchitis = Variable("Bronchitis", 2)
-Coughing = Variable("Coughing", 2)
-Wheezing = Variable("Wheezing", 2)
 
-f_3dim = np.zeros((2,2,2))
-f_3dim[0,0,0] = 0.9999
-f_3dim[0,0,1] = 0.0001
-f_3dim[0,1,0] = 0.3
-f_3dim[0,1,1] = 0.7
-f_3dim[1,0,0] = 0.1
-f_3dim[1,0,1] = 0.9
-f_3dim[1,1,0] = 0.01
-f_3dim[1,1,1] = 0.99
-f_0 = Factor("f_0", np.array([[0.999,0.001],[0.7,0.3]]),[Influenza,SoreThroat])
-f_1 = Factor("f_1", np.array([[0.95,0.05],[0.1,0.9]]),[Influenza,Fever])
-f_2 = Factor("f_2", f_3dim ,[Influenza,Smokes,Bronchitis])
-f_3 = Factor("f_3", np.array([[0.93,0.07],[0.2,0.8]]),[Bronchitis,Coughing])
-f_4 = Factor("f_4", np.array([[0.999,0.001],[0.4,0.6]]),[Bronchitis,Wheezing])
-f_5 = Factor("f_5", np.array([0.95,0.05]),[Influenza])
-f_6 = Factor("f_6", np.array([0.8,0.2]),[Smokes])
+def send_pending(node):
+    if node.pending:
+        for pending_neigh in node.pending:
+            node.send_sp_msg(pending_neigh)
 
-print type(f_0)
-f_0.send_sp_msg(SoreThroat)
+
+def sum_product(node_list):
+    # Begin to end
+    for node in node_list:
+        send_pending(node)
+
+    # End to begin
+    for node in node_list[::-1]:
+        send_pending(node)
+
+def test_sum_product():
+    Influenza = Variable("Influenza", 2)
+    Smokes = Variable("Smokes", 2)
+    SoreThroat = Variable("SoreThroat", 2)
+    Fever = Variable("Fever", 2)
+    Bronchitis = Variable("Bronchitis", 2)
+    Coughing = Variable("Coughing", 2)
+    Wheezing = Variable("Wheezing", 2)
+
+    f_3dim = np.zeros((2, 2, 2))
+    f_3dim[0, 0, 0] = 0.9999
+    f_3dim[0, 0, 1] = 0.0001
+    f_3dim[0, 1, 0] = 0.3
+    f_3dim[0, 1, 1] = 0.7
+    f_3dim[1, 0, 0] = 0.1
+    f_3dim[1, 0, 1] = 0.9
+    f_3dim[1, 1, 0] = 0.01
+    f_3dim[1, 1, 1] = 0.99
+    f_0 = Factor("f_0", np.array([[0.999, 0.001], [0.7, 0.3]]), [Influenza, SoreThroat])
+    f_1 = Factor("f_1", np.array([[0.95, 0.05], [0.1, 0.9]]), [Influenza, Fever])
+    f_2 = Factor("f_2", f_3dim, [Influenza, Smokes, Bronchitis])
+    f_3 = Factor("f_3", np.array([[0.93, 0.07], [0.2, 0.8]]), [Bronchitis, Coughing])
+    f_4 = Factor("f_4", np.array([[0.999, 0.001], [0.4, 0.6]]), [Bronchitis, Wheezing])
+    f_5 = Factor("f_5", np.array([0.95, 0.05]), [Influenza])
+    f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
+
