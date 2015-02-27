@@ -198,7 +198,26 @@ class Factor(Node):
 
     def send_ms_msg(self, other):
         # TODO: implement Factor -> Variable message for max-sum
-        pass
+        neighbours = set(self.neighbours)
+        receiving_neighbours = neighbours - {other}
+        receiving_i = [self.neighbours.index(n) for n in receiving_neighbours]
+
+        for receiv_node in receiving_neighbours:
+            if receiv_node not in self.in_msgs:
+                raise Exception('did not receive message for node %s' % str(receiv_node))
+
+        received_msgs = [self.in_msgs.get(n) for n in receiving_neighbours]
+
+        if not receiving_neighbours:
+            msg = np.log(self.f)
+        else:
+            msgs = []
+            summed_msgs = np.add.reduce(received_msgs)
+            print receiving_i
+            for i in receiving_i:
+                msgs.append(np.log(self.f[i])+  summed_msgs[i])
+            msg = max(msgs)
+        other.receive_msg(self,msg)
 
 
 def send_pending(node):
@@ -271,9 +290,37 @@ def test_sum_product():
     print_marginal(SoreThroat)
     print_marginal(Smokes)
 
+def test_ms_product():
+    Influenza = Variable("Influenza", 2)
+    Smokes = Variable("Smokes", 2)
+    SoreThroat = Variable("SoreThroat", 2)
+    Fever = Variable("Fever", 2)
+    Bronchitis = Variable("Bronchitis", 2)
+    Coughing = Variable("Coughing", 2)
+    Wheezing = Variable("Wheezing", 2)
+
+    f_3dim = np.zeros((2, 2, 2))
+    f_3dim[0, 0, 0] = 0.9999
+    f_3dim[0, 0, 1] = 0.0001
+    f_3dim[0, 1, 0] = 0.3
+    f_3dim[0, 1, 1] = 0.7
+    f_3dim[1, 0, 0] = 0.1
+    f_3dim[1, 0, 1] = 0.9
+    f_3dim[1, 1, 0] = 0.01
+    f_3dim[1, 1, 1] = 0.99
+    f_0 = Factor("f_0", np.array([[0.999, 0.001], [0.7, 0.3]]), [Influenza, SoreThroat])
+    f_1 = Factor("f_1", np.array([[0.95, 0.05], [0.1, 0.9]]), [Influenza, Fever])
+    f_2 = Factor("f_2", f_3dim, [Influenza, Smokes, Bronchitis])
+    f_3 = Factor("f_3", np.array([[0.93, 0.07], [0.2, 0.8]]), [Bronchitis, Coughing])
+    f_4 = Factor("f_4", np.array([[0.999, 0.001], [0.4, 0.6]]), [Bronchitis, Wheezing])
+    f_5 = Factor("f_5", np.array([0.95, 0.05]), [Influenza])
+    f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
+
+    f_5.send_ms_msg(Influenza)
+
 
 if __name__ == '__main__':
     # try:
-    test_sum_product()
+    test_ms_product()
     # except:
     # print "doei"
