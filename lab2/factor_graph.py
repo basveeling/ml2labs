@@ -1,25 +1,27 @@
 import numpy as np
 
+
 class Node(object):
     """
     Base-class for Nodes in a factor graph. Only instantiate sub-classes of Node.
     """
+
     def __init__(self, name):
         # A name for this Node, for printing purposes
         self.name = name
-        
+
         # Neighbours in the graph, identified with their index in this list.
         # i.e. self.neighbours contains neighbour 0 through len(self.neighbours) - 1.
         self.neighbours = []
-        
+
         # Reset the node-state (not the graph topology)
         self.reset()
-        
+
     def reset(self):
         # Incoming messages; a dictionary mapping neighbours to messages.
         # That is, it maps  Node -> np.ndarray.
         self.in_msgs = {}
-        
+
         # A set of neighbours for which this node has pending messages.
         # We use a python set object so we don't have to worry about duplicates.
         self.pending = set([])
@@ -30,20 +32,23 @@ class Node(object):
     def send_sp_msg(self, other):
         # To be implemented in subclass.
         raise Exception('Method send_sp_msg not implemented in base-class Node')
-   
+
     def send_ms_msg(self, other):
         # To be implemented in subclass.
         raise Exception('Method send_ms_msg not implemented in base-class Node')
-    
+
     def receive_msg(self, other, msg):
         # Store the incomming message, replacing previous messages from the same node
+        print "\t %s received message from %s: %s" % (self, other, msg)
         self.in_msgs[other] = msg
 
-        for neighbour in (set(self.neighbours) - {other}):
+        for neighbour in set(self.neighbours):
+
             # heb ik van mijn ander andere neighbours alle messages binnen
-            if all(self.in_msgs[other_neighbour] for other_neighbour in (set(self.neighbours) - {other, neighbour})):
+            if all((other_neighbour in self.in_msgs) for other_neighbour in (set(self.neighbours) - {neighbour})):
+
                 self.pending.add(neighbour)
-    
+        print "\t %s now has a pending message for %s" % (self, ', '.join([str(p) for p in self.pending]))
     def __str__(self):
         # This is printed when using 'print node_instance'
         return self.name
@@ -61,10 +66,10 @@ class Variable(Node):
             and the allowable states are 0, 1.
         """
         self.num_states = num_states
-        
+
         # Call the base-class constructor
         super(Variable, self).__init__(name)
-    
+
     def set_observed(self, observed_state):
         """
         Set this variable to an observed state.
@@ -75,7 +80,7 @@ class Variable(Node):
         # Could be 0.0 for sum-product, but log(0.0) = -inf so a tiny value is preferable for max-sum
         self.observed_state[:] = 0.000001
         self.observed_state[observed_state] = 1.0
-        
+
     def set_latent(self):
         """
         Erase an observed state for this variable and consider it latent again.
@@ -84,11 +89,11 @@ class Variable(Node):
         # Using this representation we need not differentiate between observed and latent
         # variables when sending messages.
         self.observed_state[:] = 1.0
-        
+
     def reset(self):
         super(Variable, self).reset()
         self.observed_state = np.ones(self.num_states)
-        
+
     def marginal(self, Z=None):
         """
         Compute the marginal distribution of this Variable.
@@ -107,29 +112,40 @@ class Variable(Node):
 
         marginal /= Z
         return marginal, Z
-    
+
     def send_sp_msg(self, other):
         """
         Variable -> Factor message for sum-product
         :param other:
         :return:
         """
-        neighbours = set(self.neighbours)
-        receiving_neighbours = neighbours - {other}
+        if len(self.neighbours) == 1:
+            msg = np.ones(self.num_states)
+        else:
+            # if True:
+            neighbours = set(self.neighbours)
+            receiving_neighbours = neighbours - {other}
 
-        for receiv_node in receiving_neighbours:
-            if receiv_node not in self.in_msgs:
-                raise Exception('did not receive message for node %s' % str(receiv_node))
+            for receiv_node in receiving_neighbours:
+                if receiv_node not in self.in_msgs:
+                    raise Exception('did not receive message for node %s' % str(receiv_node))
 
-        received_msgs = [self.in_msgs.get(n) for n in receiving_neighbours]
+            received_msgs = [self.in_msgs.get(n) for n in receiving_neighbours]
 
-        # TODO: check deze implementatie als received_msgs klaar is
-        msg = np.multiply.reduce(np.ix_(*received_msgs))
+            # TODO: check deze implementatie als received_msgs klaar is
+            if len(received_msgs) > 1:
+                msg = np.multiply(*received_msgs)
+            else:
+                msg = received_msgs[0]
+        if msg.shape == ():
+            msg = np.array([float(msg)])
         other.receive_msg(self, msg)
+        self.pending.remove(other)
 
     def send_ms_msg(self, other):
         # TODO: implement Variable -> Factor message for max-sum
         pass
+
 
 class Factor(Node):
     def __init__(self, name, f, neighbours):
@@ -138,23 +154,26 @@ class Factor(Node):
         Args:
             name: a name string for this node. Used for printing
             f: a numpy.ndarray with N axes, where N is the number of neighbours.
-               That is, the axes of f correspond to variables, and the index along that axes corresponds to a value of that variable.
+               That is, the axes of f correspond to variables, and the index along that axes corresponds to a value
+               of that variable.
                Each axis of the array should have as many entries as the corresponding neighbour variable has states.
             neighbours: a list of neighbouring Variables. Bi-directional connections are created.
         """
         # Call the base-class constructor
         super(Factor, self).__init__(name)
 
-        assert len(neighbours) == f.ndim, 'Factor function f should accept as many arguments as this Factor node has neighbours'
-        
+        assert len(neighbours) == f.ndim, 'Factor function f should accept as many arguments as this Factor node has ' \
+                                          'neighbours'
+
         for nb_ind in range(len(neighbours)):
             nb = neighbours[nb_ind]
-            assert f.shape[nb_ind] == nb.num_states, 'The range of the factor function f is invalid for input %i %s' % (nb_ind, nb.name)
+            assert f.shape[nb_ind] == nb.num_states, 'The range of the factor function f is invalid for input %i %s' % (
+                nb_ind, nb.name)
             self.add_neighbour(nb)
             nb.add_neighbour(self)
 
         self.f = f
-        
+
     def send_sp_msg(self, other):
         """
         Factor -> Variable message for sum-product
@@ -162,19 +181,21 @@ class Factor(Node):
         :return:
         """
         neighbours = set(self.neighbours)
-        receiving_neighbours = neighbours - {other}
-        receiving_i = [self.neighbours.index(n) for n in receiving_neighbours]
+        receiving_neighbours = list(neighbours - {other})
+        mes_i = [receiving_neighbours.index(n) for n in receiving_neighbours]
+        fac_i = [self.neighbours.index(n) for n in receiving_neighbours]
 
         for receiv_node in receiving_neighbours:
             if receiv_node not in self.in_msgs:
                 raise Exception('did not receive message for node %s' % str(receiv_node))
-        
+
         received_msgs = [self.in_msgs.get(n) for n in receiving_neighbours]
 
         # TODO: check deze implementatie als received_msgs klaar is
-        a = np.multiply.reduce(np.ix_(*received_msgs))
-        msg = np.tensordot(a, self.f, axes=(receiving_i, receiving_i))
+        a = np.array(np.multiply.reduce(np.ix_(*received_msgs)))
+        msg = np.tensordot(a, self.f, axes=(mes_i, fac_i))
         other.receive_msg(self, msg)
+        self.pending.remove(other)
 
     def send_ms_msg(self, other):
         # TODO: implement Factor -> Variable message for max-sum
@@ -182,19 +203,28 @@ class Factor(Node):
 
 
 def send_pending(node):
+    print "-send pending for node %s " % node
     if node.pending:
-        for pending_neigh in node.pending:
+        for pending_neigh in list(node.pending):
             node.send_sp_msg(pending_neigh)
 
 
 def sum_product(node_list):
+    print "-- FORWARD --"
     # Begin to end
     for node in node_list:
         send_pending(node)
 
+    print "-- Backward --"
     # End to begin
     for node in node_list[::-1]:
         send_pending(node)
+
+
+def print_marginal(node):
+    marginal, z = node.marginal()
+    print "Marginal for %s is %s with z %s" % (node.name, marginal, z)
+
 
 def test_sum_product():
     Influenza = Variable("Influenza", 2)
@@ -222,3 +252,23 @@ def test_sum_product():
     f_5 = Factor("f_5", np.array([0.95, 0.05]), [Influenza])
     f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
 
+    # prior factors
+    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, Wheezing, f_3, f_4, Bronchitis]
+    f_5.pending.add(Influenza)
+    f_6.pending.add(Smokes)
+    SoreThroat.pending.add(f_0)
+    Fever.pending.add(f_1)
+    Coughing.pending.add(f_3)
+    Wheezing.pending.add(f_4)
+    sum_product(node_list)
+
+    print_marginal(Influenza)
+    print_marginal(Bronchitis)
+    print_marginal(Coughing)
+
+
+if __name__ == '__main__':
+    # try:
+    test_sum_product()
+    # except:
+    # print "doei"
