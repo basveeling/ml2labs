@@ -38,7 +38,7 @@ class Node(object):
         raise Exception('Method send_ms_msg not implemented in base-class Node')
 
     def receive_msg(self, other, msg):
-        # Store the incomming message, replacing previous messages from the same node
+        # Store the incoming message, replacing previous messages from the same node
         print "\t %s received message from %s: %s" % (self, other, msg)
         self.in_msgs[other] = msg
 
@@ -46,9 +46,9 @@ class Node(object):
 
             # heb ik van mijn ander andere neighbours alle messages binnen
             if all((other_neighbour in self.in_msgs) for other_neighbour in (set(self.neighbours) - {neighbour})):
-
                 self.pending.add(neighbour)
         print "\t %s now has a pending message for %s" % (self, ', '.join([str(p) for p in self.pending]))
+
     def __str__(self):
         # This is printed when using 'print node_instance'
         return self.name
@@ -104,9 +104,10 @@ class Variable(Node):
          Z is either equal to the input Z, or computed in this function (if Z=None was passed).
         """
         marginal = np.ones(self.num_states)
+        print "Computing marginal for %s" % self
         for neighbour in self.neighbours:
-            # TODO:
-            marginal = np.dot(marginal, self.in_msgs[neighbour])
+            print "\t message from %s is %s" % (neighbour, self.in_msgs[neighbour])
+            marginal *= self.in_msgs[neighbour]
         if Z is None:
             Z = np.sum(marginal)
 
@@ -119,6 +120,8 @@ class Variable(Node):
         :param other:
         :return:
         """
+        if self.name == "Influenza":
+            print self.in_msgs
         if len(self.neighbours) == 1:
             msg = np.ones(self.num_states)
         else:
@@ -134,7 +137,9 @@ class Variable(Node):
 
             # TODO: check deze implementatie als received_msgs klaar is
             if len(received_msgs) > 1:
-                msg = np.multiply(*received_msgs)
+                msg = np.ones(self.num_states)
+                for received_msg in received_msgs:
+                    msg *= received_msg
             else:
                 msg = received_msgs[0]
         if msg.shape == ():
@@ -211,12 +216,14 @@ def send_pending(node):
 
 def sum_product(node_list):
     print "-- FORWARD --"
+    print [n.name for n in node_list]
     # Begin to end
     for node in node_list:
         send_pending(node)
 
     print "-- Backward --"
     # End to begin
+    print [n.name for n in node_list[::-1]]
     for node in node_list[::-1]:
         send_pending(node)
 
@@ -253,7 +260,8 @@ def test_sum_product():
     f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
 
     # prior factors
-    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, Wheezing, f_3, f_4, Bronchitis]
+    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
+                 Bronchitis]
     f_5.pending.add(Influenza)
     f_6.pending.add(Smokes)
     SoreThroat.pending.add(f_0)
