@@ -240,6 +240,11 @@ def send_pending(node):
         for pending_neigh in list(node.pending):
             node.send_sp_msg(pending_neigh)
 
+def send_pending_ms(node):
+    if node.pending:
+        for pending_neigh in list(node.pending):
+            node.send_ms_msg(pending_neigh)
+
 
 def sum_product(node_list):
     # Begin to end
@@ -249,6 +254,14 @@ def sum_product(node_list):
     # End to begin
     for node in node_list[::-1]:
         send_pending(node)
+
+def ms_product(node_list):
+    for node in node_list:
+        send_pending_ms(node)
+
+    # End to begin
+    for node in node_list[::-1]:
+        send_pending_ms(node)
 
 
 def print_marginal(node):
