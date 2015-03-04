@@ -47,7 +47,7 @@ class Node(object):
             # heb ik van mijn ander andere neighbours alle messages binnen
             if all((other_neighbour in self.in_msgs) for other_neighbour in (set(self.neighbours) - {neighbour})):
                 self.pending.add(neighbour)
-        # print "\t %s now has a pending message for %s" % (self, ', '.join([str(p) for p in self.pending]))
+                # print "\t %s now has a pending message for %s" % (self, ', '.join([str(p) for p in self.pending]))
 
     def __str__(self):
         # This is printed when using 'print node_instance'
@@ -159,7 +159,7 @@ class Variable(Node):
         else:
             summed_msgs = np.add.reduce(received_msgs)
             msg = summed_msgs
-        other.receive_msg(self,msg)
+        other.receive_msg(self, msg)
 
 
 class Factor(Node):
@@ -230,16 +230,16 @@ class Factor(Node):
             summed_msgs = np.add.reduce(received_msgs)
             print receiving_i
             for i in receiving_i:
-                msgs.append(np.log(self.f[i])+  summed_msgs[i])
-            print msgs
+                msgs.append(np.log(self.f[i]) + summed_msgs[i])
             msg = max(msgs)
-        other.receive_msg(self,msg)
+        other.receive_msg(self, msg)
 
 
 def send_pending(node):
     if node.pending:
         for pending_neigh in list(node.pending):
             node.send_sp_msg(pending_neigh)
+
 
 def send_pending_ms(node):
     if node.pending:
@@ -256,7 +256,8 @@ def sum_product(node_list):
     for node in node_list[::-1]:
         send_pending(node)
 
-def max_sum(node_list):
+
+def ms_product(node_list):
     for node in node_list:
         send_pending_ms(node)
 
@@ -270,7 +271,7 @@ def print_marginal(node):
     print "Marginal for %s is %s with z %s" % (node.name, marginal, z)
 
 
-def test_sum_product():
+def init_network():
     Influenza = Variable("Influenza", 2)
     Smokes = Variable("Smokes", 2)
     SoreThroat = Variable("SoreThroat", 2)
@@ -278,7 +279,6 @@ def test_sum_product():
     Bronchitis = Variable("Bronchitis", 2)
     Coughing = Variable("Coughing", 2)
     Wheezing = Variable("Wheezing", 2)
-
     f_3dim = np.zeros((2, 2, 2))
     f_3dim[0, 0, 0] = 0.9999
     f_3dim[0, 0, 1] = 0.0001
@@ -295,6 +295,12 @@ def test_sum_product():
     f_4 = Factor("f_4", np.array([[0.999, 0.001], [0.4, 0.6]]), [Bronchitis, Wheezing])
     f_5 = Factor("f_5", np.array([0.95, 0.05]), [Influenza])
     f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
+    return Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, f_6
+
+
+def test_sum_product():
+    Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
+    f_6 = init_network()
 
     # prior factors
     node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
@@ -305,7 +311,7 @@ def test_sum_product():
     Fever.pending.add(f_1)
     Coughing.pending.add(f_3)
     Wheezing.pending.add(f_4)
-    
+
     Bronchitis.set_observed(1)
     Influenza.set_observed(0)
 
@@ -319,42 +325,12 @@ def test_sum_product():
     print_marginal(SoreThroat)
     print_marginal(Smokes)
 
+
 def test_ms_product():
-    Influenza = Variable("Influenza", 2)
-    Smokes = Variable("Smokes", 2)
-    SoreThroat = Variable("SoreThroat", 2)
-    Fever = Variable("Fever", 2)
-    Bronchitis = Variable("Bronchitis", 2)
-    Coughing = Variable("Coughing", 2)
-    Wheezing = Variable("Wheezing", 2)
+    Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
+    f_6 = init_network()
 
-    f_3dim = np.zeros((2, 2, 2))
-    f_3dim[0, 0, 0] = 0.9999
-    f_3dim[0, 0, 1] = 0.0001
-    f_3dim[0, 1, 0] = 0.3
-    f_3dim[0, 1, 1] = 0.7
-    f_3dim[1, 0, 0] = 0.1
-    f_3dim[1, 0, 1] = 0.9
-    f_3dim[1, 1, 0] = 0.01
-    f_3dim[1, 1, 1] = 0.99
-    f_0 = Factor("f_0", np.array([[0.999, 0.001], [0.7, 0.3]]), [Influenza, SoreThroat])
-    f_1 = Factor("f_1", np.array([[0.95, 0.05], [0.1, 0.9]]), [Influenza, Fever])
-    f_2 = Factor("f_2", f_3dim, [Influenza, Smokes, Bronchitis])
-    f_3 = Factor("f_3", np.array([[0.93, 0.07], [0.2, 0.8]]), [Bronchitis, Coughing])
-    f_4 = Factor("f_4", np.array([[0.999, 0.001], [0.4, 0.6]]), [Bronchitis, Wheezing])
-    f_5 = Factor("f_5", np.array([0.95, 0.05]), [Influenza])
-    f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
-
-    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
-                 Bronchitis]
-    f_5.pending.add(Influenza)
-    f_6.pending.add(Smokes)
-    SoreThroat.pending.add(f_0)
-    Fever.pending.add(f_1)
-    Coughing.pending.add(f_3)
-    Wheezing.pending.add(f_4)
-
-    max_sum(node_list)
+    f_5.send_ms_msg(Influenza)
 
 
 if __name__ == '__main__':
