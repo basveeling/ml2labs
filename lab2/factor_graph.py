@@ -144,7 +144,22 @@ class Variable(Node):
 
     def send_ms_msg(self, other):
         # TODO: implement Variable -> Factor message for max-sum
-        pass
+        neighbours = set(self.neighbours)
+        receiving_neighbours = neighbours - {other}
+        # receiving_i = [self.neighbour  s.index(n) for n in receiving_neighbours]
+
+        for receiv_node in receiving_neighbours:
+            if receiv_node not in self.in_msgs:
+                raise Exception('did not receive message for node %s' % str(receiv_node))
+
+        received_msgs = [self.in_msgs.get(n) for n in receiving_neighbours]
+
+        if not receiving_neighbours:
+            msg = np.zeros(self.num_states)
+        else:
+            summed_msgs = np.add.reduce(received_msgs)
+            msg = summed_msgs
+        other.receive_msg(self,msg)
 
 
 class Factor(Node):
@@ -200,7 +215,7 @@ class Factor(Node):
         # TODO: implement Factor -> Variable message for max-sum
         neighbours = set(self.neighbours)
         receiving_neighbours = neighbours - {other}
-        receiving_i = [self.neighbours.index(n) for n in receiving_neighbours]
+        receiving_i = [self.neighbour   s.index(n) for n in receiving_neighbours]
 
         for receiv_node in receiving_neighbours:
             if receiv_node not in self.in_msgs:
