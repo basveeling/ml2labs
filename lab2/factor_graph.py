@@ -113,6 +113,15 @@ class Variable(Node):
         marginal /= Z
         return marginal, Z
 
+    def map_state(self):
+        """
+        Compute the map_state  of this Variable.
+        """
+        summed = np.sum(np.array(self.in_msgs.values()), axis=0)
+        summed += np.log(self.observed_state)
+        return np.argmax(summed)
+
+
     def send_sp_msg(self, other):
         """
         Variable -> Factor message for sum-product
@@ -159,6 +168,10 @@ class Variable(Node):
         else:
             summed_msgs = np.add.reduce(received_msgs)
             msg = summed_msgs
+
+        msg += np.log(self.observed_state)
+        if self.name == "Bronchitis":
+            print msg
         other.receive_msg(self, msg)
 
 
@@ -231,10 +244,10 @@ class Factor(Node):
             summed_msgs_f = np.log(self.f) + summed_msgs
             # TODO: fix index vs i
             # for i, index in enumerate(receiving_i):
-            #     # print self.f[index], summed_msgs[i]
+            # # print self.f[index], summed_msgs[i]
             #     print self.f[index], self.name, summed_msgs
             #     msgs[i, :] = ()
-            msg = np.amax(summed_msgs_f,axis=tuple(receiving_i))
+            msg = np.amax(summed_msgs_f, axis=tuple(receiving_i))
         other.receive_msg(self, msg)
 
 
@@ -272,6 +285,11 @@ def ms_product(node_list):
 def print_marginal(node):
     marginal, z = node.marginal()
     print "Marginal for %s is %s with z %s" % (node.name, marginal, z)
+
+
+def print_map_state(node):
+    map_state = node.map_state()
+    print "Map state for %s is %s" % (node.name, map_state)
 
 
 def init_network():
@@ -341,7 +359,21 @@ def test_ms_product():
     Fever.pending.add(f_1)
     Coughing.pending.add(f_3)
     Wheezing.pending.add(f_4)
+
+    Coughing.set_observed(1)
+    Wheezing.set_observed(1)
+    Fever.set_observed(1)
+    SoreThroat.set_observed(1)
+    # Influenza.set_observed(1)
     ms_product(node_list)
+
+    print_map_state(Influenza)
+    print_map_state(Bronchitis)
+    print_map_state(Coughing)
+    print_map_state(Wheezing)
+    print_map_state(Fever)
+    print_map_state(SoreThroat)
+    print_map_state(Smokes)
 
 
 if __name__ == '__main__':
