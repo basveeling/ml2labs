@@ -215,7 +215,7 @@ class Factor(Node):
         # TODO: implement Factor -> Variable message for max-sum
         neighbours = set(self.neighbours)
         receiving_neighbours = neighbours - {other}
-        receiving_i = [self.neighbour   s.index(n) for n in receiving_neighbours]
+        receiving_i = [self.neighbours.index(n) for n in receiving_neighbours]
 
         for receiv_node in receiving_neighbours:
             if receiv_node not in self.in_msgs:
@@ -231,6 +231,7 @@ class Factor(Node):
             print receiving_i
             for i in receiving_i:
                 msgs.append(np.log(self.f[i])+  summed_msgs[i])
+            print msgs
             msg = max(msgs)
         other.receive_msg(self,msg)
 
@@ -255,7 +256,7 @@ def sum_product(node_list):
     for node in node_list[::-1]:
         send_pending(node)
 
-def ms_product(node_list):
+def max_sum(node_list):
     for node in node_list:
         send_pending_ms(node)
 
@@ -344,7 +345,16 @@ def test_ms_product():
     f_5 = Factor("f_5", np.array([0.95, 0.05]), [Influenza])
     f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
 
-    f_5.send_ms_msg(Influenza)
+    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
+                 Bronchitis]
+    f_5.pending.add(Influenza)
+    f_6.pending.add(Smokes)
+    SoreThroat.pending.add(f_0)
+    Fever.pending.add(f_1)
+    Coughing.pending.add(f_3)
+    Wheezing.pending.add(f_4)
+
+    max_sum(node_list)
 
 
 if __name__ == '__main__':
