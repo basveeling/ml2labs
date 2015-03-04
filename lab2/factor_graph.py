@@ -226,12 +226,13 @@ class Factor(Node):
         if not receiving_neighbours:
             msg = np.log(self.f)
         else:
-            msgs = []
+            msgs = np.zeros((len(receiving_i), self.f[0].shape[0]))
             summed_msgs = np.add.reduce(received_msgs)
             print receiving_i
-            for i in receiving_i:
-                msgs.append(np.log(self.f[i]) + summed_msgs[i])
-            msg = max(msgs)
+            # TODO: fix index vs i
+            for i, index in enumerate(receiving_i):
+                msgs[i, :] = (np.log(self.f[index]) + summed_msgs[i])
+            msg = np.max(msgs,axis=0)
         print 'sending message'
         other.receive_msg(self, msg)
 
@@ -333,7 +334,14 @@ def test_ms_product():
     node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
                  Bronchitis]
 
+    f_5.pending.add(Influenza)
+    f_6.pending.add(Smokes)
+    SoreThroat.pending.add(f_0)
+    Fever.pending.add(f_1)
+    Coughing.pending.add(f_3)
+    Wheezing.pending.add(f_4)
     ms_product(node_list)
+
 
 if __name__ == '__main__':
     # try:
