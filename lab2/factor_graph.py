@@ -226,14 +226,15 @@ class Factor(Node):
         if not receiving_neighbours:
             msg = np.log(self.f)
         else:
-            msgs = np.zeros((len(receiving_i), self.f[0].shape[0]))
-            summed_msgs = np.add.reduce(received_msgs)
-            print receiving_i
+            msgs = np.zeros((len(receiving_i), other.num_states))
+            summed_msgs = np.add.reduce(np.ix_(*received_msgs))
+            summed_msgs_f = np.log(self.f) + summed_msgs
             # TODO: fix index vs i
-            for i, index in enumerate(receiving_i):
-                msgs[i, :] = (np.log(self.f[index]) + summed_msgs[i])
-            msg = np.max(msgs,axis=0)
-        print 'sending message'
+            # for i, index in enumerate(receiving_i):
+            #     # print self.f[index], summed_msgs[i]
+            #     print self.f[index], self.name, summed_msgs
+            #     msgs[i, :] = ()
+            msg = np.amax(summed_msgs_f,axis=tuple(receiving_i))
         other.receive_msg(self, msg)
 
 
