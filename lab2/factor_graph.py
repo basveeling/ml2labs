@@ -215,7 +215,7 @@ class Factor(Node):
         # TODO: implement Factor -> Variable message for max-sum
         neighbours = set(self.neighbours)
         receiving_neighbours = neighbours - {other}
-        receiving_i = [self.neighbour   s.index(n) for n in receiving_neighbours]
+        receiving_i = [self.neighbours.index(n) for n in receiving_neighbours]
 
         for receiv_node in receiving_neighbours:
             if receiv_node not in self.in_msgs:
