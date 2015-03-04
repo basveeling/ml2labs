@@ -232,6 +232,7 @@ class Factor(Node):
             for i in receiving_i:
                 msgs.append(np.log(self.f[i]) + summed_msgs[i])
             msg = max(msgs)
+        print 'sending message'
         other.receive_msg(self, msg)
 
 
@@ -329,9 +330,10 @@ def test_sum_product():
 def test_ms_product():
     Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
     f_6 = init_network()
+    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
+                 Bronchitis]
 
-    f_5.send_ms_msg(Influenza)
-
+    ms_product(node_list)
 
 if __name__ == '__main__':
     # try:
