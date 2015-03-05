@@ -1,5 +1,5 @@
 import numpy as np
-
+from pylab import imread, gray
 
 class Node(object):
     """
@@ -318,6 +318,65 @@ def init_network():
     f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
     return Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, f_6
 
+def load_images():
+
+    # Load the image and binarize
+    im = np.mean(imread('dalmatian1.png'), axis=2) > 0.5
+    # imshow(im)
+    # gray()
+
+    # Add some noise
+    noise = np.random.rand(*im.shape) > 0.9
+    noise_im = np.logical_xor(noise, im)
+    # figure()
+    # imshow(noise_im)
+
+    test_im = np.zeros((10,10))
+    #test_im[5:8, 3:8] = 1.0
+    #test_im[5,5] = 1.0
+    # figure()
+    # imshow(test_im)
+
+    # Add some noise
+    noise = np.random.rand(*test_im.shape) > 0.9
+    noise_test_im = np.logical_xor(noise, test_im)
+    # figure()
+    # imshow(noise_test_im)
+    return noise_im, noise_test_im
+
+def init_image_graph(im):
+    xs = []
+    ys = []
+    factors = []
+    a,b = im.shape
+    for i in range(a):
+        for j in range(b):
+            y = Variable("y"+str(i)+str(j),2)
+            x = Variable("x"+str(i)+str(j),2)
+            f= np.ones((2,2)) #TODO: wat moet dit worden?
+            factor = Factor("f" +str(i)+str(j), f, [y,x])
+            y.set_observed(im[i,j])
+            x.set_latent()
+            ys.append(y)
+            xs.append(x)
+            factors.append(factor)
+    graph = []
+    graph.append(ys[0])
+    graph.append(factors[0])
+    graph.append(xs[0])
+    for i in range(1,len(xs)):
+        graph.append(ys[i])
+        graph.append(factors[i])
+        if i>b:
+            f1 = np.ones((2,2))
+            graph.append(Factor("f"+str(i-b)+str(i),f,[xs[i-b],xs[i]]))
+        if i%b == 0:
+            continue
+        else:
+            f = np.ones((2,2))
+            graph.append(Factor("f"+str(i-1)+str(i),f,[xs[i-1],xs[i]]))
+        graph.append(xs[i])
+    return graph
 
 def test_sum_product():
     Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
@@ -360,11 +419,12 @@ def test_ms_product():
     Coughing.pending.add(f_3)
     Wheezing.pending.add(f_4)
 
-    Coughing.set_observed(1)
-    Wheezing.set_observed(1)
-    Fever.set_observed(1)
-    SoreThroat.set_observed(1)
+    # Coughing.set_observed(1)
+    # Wheezing.set_observed(1)
+    # Fever.set_observed(0)
+    # SoreThroat.set_observed(1)
     # Influenza.set_observed(1)
+    Smokes.set_observed(1)
     ms_product(node_list)
 
     print_map_state(Influenza)
@@ -378,6 +438,9 @@ def test_ms_product():
 
 if __name__ == '__main__':
     # try:
-    test_ms_product()
+    _,im = load_images()
+    graph = init_image_graph(im)
+    for node in graph:
+        print node.name
     # except:
     # print "doei"
