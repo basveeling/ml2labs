@@ -331,9 +331,9 @@ def load_images():
     # figure()
     # imshow(noise_im)
 
-    test_im = np.zeros((10,10))
-    #test_im[5:8, 3:8] = 1.0
-    #test_im[5,5] = 1.0
+    test_im = np.ones((10,10))
+    # test_im[5:8, 3:8] = 1.0
+    # test_im[5,5] = 1.0
     # figure()
     # imshow(test_im)
 
@@ -351,10 +351,10 @@ def init_image_graph(im):
     a,b = im.shape
     for i in range(a):
         for j in range(b):
-            y = Variable("y"+str(i)+str(j),2)
-            x = Variable("x"+str(i)+str(j),2)
-            f= np.ones((2,2)) #TODO: wat moet dit worden?
-            factor = Factor("f" +str(i)+str(j), f, [y,x])
+            y = Variable("y "+str(i)+ ","+str(j),2)
+            x = Variable("x "+str(i)+ ","+str(j),2)
+            f= np.array([[0.95,0.05],[0.05,0.95]]) #TODO: wat moet dit worden?
+            factor = Factor("f " +str(i) + "," +str(j), f, [y,x])
             y.set_observed(im[i,j])
             x.set_latent()
             ys.append(y)
@@ -368,15 +368,15 @@ def init_image_graph(im):
         graph.append(ys[i])
         graph.append(factors[i])
         if i>b:
-            f1 = np.ones((2,2))
-            graph.append(Factor("f"+str(i-b)+str(i),f,[xs[i-b],xs[i]]))
+            f1 = np.array([[0.95,0.05],[0.05,0.95]]) #TODO: wat moet dit worden
+            graph.append(Factor("f "+xs[i-b].name+" to "+xs[i].name,f1,[xs[i-b],xs[i]]))
         if i%b == 0:
             continue
         else:
-            f = np.ones((2,2))
-            graph.append(Factor("f"+str(i-1)+str(i),f,[xs[i-1],xs[i]]))
+            f2 = np.array([[0.95,0.05],[0.05,0.95]]) #TODO: zelfde verhaal
+            graph.append(Factor("f "+xs[i-1].name+" to "+xs[i].name,f2,[xs[i-1],xs[i]]))
         graph.append(xs[i])
-    return graph
+    return graph,xs
 
 def test_sum_product():
     Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
@@ -435,12 +435,19 @@ def test_ms_product():
     print_map_state(SoreThroat)
     print_map_state(Smokes)
 
+def test_image_denoising():
+    _,im = load_images()
+    graph,xs = init_image_graph(im)
+    ms_product(graph)
+    print im
+    pixel_values = np.zeros(len(xs))
 
+    for i,pixel in enumerate(pixel_values):
+        pixel = xs[i].map_state()
+    print pixel_values.reshape(im.shape)
+    print xs[1]
 if __name__ == '__main__':
     # try:
-    _,im = load_images()
-    graph = init_image_graph(im)
-    for node in graph:
-        print node.name
+    test_image_denoising()
     # except:
     # print "doei"
