@@ -172,7 +172,7 @@ class Variable(Node):
             msg = summed_msgs
 
         msg += np.log(self.observed_state)
-        if self.name == "Bronchitis":
+        if self.name.startswith("x"):
             print msg
         # print "\t Send msg from Var [%s] to Fac [%s] (%s)" % (self.name, other.name, str(msg))
 
@@ -247,7 +247,9 @@ class Factor(Node):
             summed_msgs_f = np.log(self.f) + summed_msgs
 
             msg = np.amax(summed_msgs_f, axis=tuple(receiving_i))
-        # print "\t Send msg from Fac [%s] to Var [%s] (%s)" % (self.name, other.name, str(msg))
+        if self.name.startswith("f(x"):
+            pass
+        # print "\t Send msg from Fac [ %s] to Var [%s] (%s)" % (self.name, other.name, str(msg))
         other.receive_msg(self, msg)
 
 
@@ -379,7 +381,7 @@ def test_ms_product():
 
 def load_images():
     # Load the image and binarize
-    im = np.mean(imread('dalmatian1.png'), axis=2) < 0.5
+    im = np.mean(imread('dalmatian1.png'), axis=2) > 0.5
     im = im[0:40, 0:40]
     # imshow(im)
     # gray()
@@ -414,8 +416,8 @@ def init_image_graph(im):
             y = Variable("y[%d,%d]" % (row, col), 2)
             x = Variable("x[%d,%d]" % (row, col), 2)
 
-            # f = np.array([[0.95, 0.05], [0.05, 0.95]])  # TODO: wat moet dit worden?
-            f = np.array([[0.9999, 0.0001], [0.0001, 0.9999]])  # TODO: wat moet dit worden?
+            f = np.array([[0.95, 0.05], [0.05, 0.95]])  # TODO: wat moet dit worden?
+            # f = np.array([[0.9999, 0.0001], [0.0001, 0.9999]])  # TODO: wat moet dit worden?
 
             factor = Factor("f " + str(row) + "," + str(col), f, [y, x])
 
@@ -432,7 +434,7 @@ def init_image_graph(im):
 
     for i in range(0, len(xs)):
         graph.append(xs[i])
-        f1 = np.array([[0.60, 0.40], [0.40, 0.60]])  # TODO: wat moet dit worden
+        f1 = np.array([[0.5, 0.5], [0.5, 0.5]])  # TODO: wat moet dit worden
         if (i + 1) % width != 0:
             right_neighbour_factor = Factor("f(%s->%s)" % (xs[i].name, xs[i + 1].name), f1, [xs[i], xs[i + 1]])
             graph.append(right_neighbour_factor)
@@ -468,7 +470,7 @@ def create_map_im(shape, xs):
 def save_image(im, name):
     figure()
     gray()
-    # im[0][0] = 0.
+    im[0][0] = 0.
     imshow(im)
     savefig("%s.png" % (name))
     close()
@@ -477,7 +479,7 @@ def save_image(im, name):
 def run_denoising(noise_im, im):
     graph, xs, ys = init_image_graph(noise_im)
     print "starting algorithm..."
-    for i in range(20):
+    for i in range(100):
         for node in graph:
             # print "- " + node.name
             send_pending_ms(node)
