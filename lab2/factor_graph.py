@@ -1,5 +1,8 @@
+import itertools
+
 import numpy as np
-from pylab import imread, gray
+from pylab import imread, figure, savefig, imshow, close, gray
+
 
 class Node(object):
     """
@@ -121,7 +124,6 @@ class Variable(Node):
         summed += np.log(self.observed_state)
         return np.argmax(summed)
 
-
     def send_sp_msg(self, other):
         """
         Variable -> Factor message for sum-product
@@ -172,6 +174,8 @@ class Variable(Node):
         msg += np.log(self.observed_state)
         if self.name == "Bronchitis":
             print msg
+        # print "\t Send msg from Var [%s] to Fac [%s] (%s)" % (self.name, other.name, str(msg))
+
         other.receive_msg(self, msg)
 
 
@@ -239,15 +243,11 @@ class Factor(Node):
         if not receiving_neighbours:
             msg = np.log(self.f)
         else:
-            msgs = np.zeros((len(receiving_i), other.num_states))
             summed_msgs = np.add.reduce(np.ix_(*received_msgs))
             summed_msgs_f = np.log(self.f) + summed_msgs
-            # TODO: fix index vs i
-            # for i, index in enumerate(receiving_i):
-            # # print self.f[index], summed_msgs[i]
-            #     print self.f[index], self.name, summed_msgs
-            #     msgs[i, :] = ()
+
             msg = np.amax(summed_msgs_f, axis=tuple(receiving_i))
+        # print "\t Send msg from Fac [%s] to Var [%s] (%s)" % (self.name, other.name, str(msg))
         other.receive_msg(self, msg)
 
 
@@ -318,65 +318,6 @@ def init_network():
     f_6 = Factor("f_6", np.array([0.8, 0.2]), [Smokes])
     return Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, f_6
 
-def load_images():
-
-    # Load the image and binarize
-    im = np.mean(imread('dalmatian1.png'), axis=2) > 0.5
-    # imshow(im)
-    # gray()
-
-    # Add some noise
-    noise = np.random.rand(*im.shape) > 0.9
-    noise_im = np.logical_xor(noise, im)
-    # figure()
-    # imshow(noise_im)
-
-    test_im = np.ones((10,10))
-    # test_im[5:8, 3:8] = 1.0
-    # test_im[5,5] = 1.0
-    # figure()
-    # imshow(test_im)
-
-    # Add some noise
-    noise = np.random.rand(*test_im.shape) > 0.9
-    noise_test_im = np.logical_xor(noise, test_im)
-    # figure()
-    # imshow(noise_test_im)
-    return noise_im, noise_test_im
-
-def init_image_graph(im):
-    xs = []
-    ys = []
-    factors = []
-    a,b = im.shape
-    for i in range(a):
-        for j in range(b):
-            y = Variable("y "+str(i)+ ","+str(j),2)
-            x = Variable("x "+str(i)+ ","+str(j),2)
-            f= np.array([[0.95,0.05],[0.05,0.95]]) #TODO: wat moet dit worden?
-            factor = Factor("f " +str(i) + "," +str(j), f, [y,x])
-            y.set_observed(im[i,j])
-            x.set_latent()
-            ys.append(y)
-            xs.append(x)
-            factors.append(factor)
-    graph = []
-    graph.append(ys[0])
-    graph.append(factors[0])
-    graph.append(xs[0])
-    for i in range(1,len(xs)):
-        graph.append(ys[i])
-        graph.append(factors[i])
-        if i>b:
-            f1 = np.array([[0.95,0.05],[0.05,0.95]]) #TODO: wat moet dit worden
-            graph.append(Factor("f "+xs[i-b].name+" to "+xs[i].name,f1,[xs[i-b],xs[i]]))
-        if i%b == 0:
-            continue
-        else:
-            f2 = np.array([[0.95,0.05],[0.05,0.95]]) #TODO: zelfde verhaal
-            graph.append(Factor("f "+xs[i-1].name+" to "+xs[i].name,f2,[xs[i-1],xs[i]]))
-        graph.append(xs[i])
-    return graph,xs
 
 def test_sum_product():
     Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
@@ -435,17 +376,129 @@ def test_ms_product():
     print_map_state(SoreThroat)
     print_map_state(Smokes)
 
-def test_image_denoising():
-    _,im = load_images()
-    graph,xs = init_image_graph(im)
-    ms_product(graph)
-    print im
-    pixel_values = np.zeros(len(xs))
 
-    for i,pixel in enumerate(pixel_values):
-        pixel = xs[i].map_state()
-    print pixel_values.reshape(im.shape)
-    print xs[1]
+def load_images():
+    # Load the image and binarize
+    im = np.mean(imread('dalmatian1.png'), axis=2) < 0.5
+    im = im[0:40, 0:40]
+    # imshow(im)
+    # gray()
+
+    # Add some noise
+    noise = np.random.rand(*im.shape) > 0.9
+    noise_im = np.logical_xor(noise, im)
+
+    test_im = np.ones((10, 10))
+    # test_im[5:8, 3:8] = 1.0
+    # test_im[5,5] = 1.0
+    # figure()
+    # imshow(test_im)
+
+    # Add some noise
+    noise = np.random.rand(*test_im.shape) > 0.9
+    noise_test_im = np.logical_xor(noise, test_im)
+    # figure()
+    # imshow(noise_test_im)
+    return im, noise_im, test_im, noise_test_im
+
+
+def init_image_graph(im):
+    xs = []
+    ys = []
+    graph = []
+    xy_factors = []
+    xx_factors = []
+    height, width = im.shape
+    for row in range(height):
+        for col in range(width):
+            y = Variable("y[%d,%d]" % (row, col), 2)
+            x = Variable("x[%d,%d]" % (row, col), 2)
+
+            # f = np.array([[0.95, 0.05], [0.05, 0.95]])  # TODO: wat moet dit worden?
+            f = np.array([[0.9999, 0.0001], [0.0001, 0.9999]])  # TODO: wat moet dit worden?
+
+            factor = Factor("f " + str(row) + "," + str(col), f, [y, x])
+
+            y.set_observed(im[row, col])
+            y.pending.add(factor)
+
+            x.set_latent()
+
+            ys.append(y)
+            graph.append(y)
+            graph.append(factor)
+            xs.append(x)
+            xy_factors.append(factor)
+
+    for i in range(0, len(xs)):
+        graph.append(xs[i])
+        f1 = np.array([[0.60, 0.40], [0.40, 0.60]])  # TODO: wat moet dit worden
+        if (i + 1) % width != 0:
+            right_neighbour_factor = Factor("f(%s->%s)" % (xs[i].name, xs[i + 1].name), f1, [xs[i], xs[i + 1]])
+            graph.append(right_neighbour_factor)
+            xx_factors.append(right_neighbour_factor)
+            # Initialize a message to the left:
+            xs[i].in_msgs[right_neighbour_factor] = np.array([np.log(.5), np.log(.5)])
+            xs[i].pending.add(right_neighbour_factor)
+
+        if i < (height - 1) * width:
+            down_neighbour_factor = Factor("f(%s->%s)" % (xs[i].name, xs[i + width].name), f1, [xs[i], xs[i + width]])
+            graph.append(down_neighbour_factor)
+            xx_factors.append(down_neighbour_factor)
+            # Initialize a message upwards:
+            xs[i].in_msgs[down_neighbour_factor] = np.array([np.log(.5), np.log(.5)])
+            xs[i].pending.add(down_neighbour_factor)
+
+    # xs[0].pending.add(xx_factors[0])
+    # xs[0].pending.add(xx_factors[1])
+    # xs[0].in_msgs[xx_factors[0]] = np.array([np.log(1), np.log(1)])
+    # xs[0].in_msgs[xx_factors[1]] = np.array([np.log(1), np.log(1)])
+    return graph, xs, ys
+
+
+def create_map_im(shape, xs):
+    new_img = np.zeros(shape)
+    for i, p in enumerate(itertools.product(range(shape[0]), range(shape[1]))):
+        row, col = p
+        new_img[row][col] = xs[i].map_state()
+
+    return new_img
+
+
+def save_image(im, name):
+    figure()
+    gray()
+    # im[0][0] = 0.
+    imshow(im)
+    savefig("%s.png" % (name))
+    close()
+
+
+def run_denoising(noise_im, im):
+    graph, xs, ys = init_image_graph(noise_im)
+    print "starting algorithm..."
+    for i in range(20):
+        for node in graph:
+            # print "- " + node.name
+            send_pending_ms(node)
+        print "----- NEXT RUN (%d) ------" % (i + 1)
+        new_img = create_map_im(im.shape, xs)
+        save_image(new_img, "iters/im_%d" % i)
+    print new_img
+    print im
+    print noise_im
+    # new_img = create_map_im(im.shape, xs)
+    save_image(im, "im")
+    save_image(noise_im, "noise_im")
+    save_image(new_img, "new_img")
+
+
+def test_image_denoising():
+    im, noise_im, test_im, noise_test_im = load_images()
+    # run_denoising(noise_test_im, test_im)
+    run_denoising(noise_im, im)
+
+
 if __name__ == '__main__':
     # try:
     test_image_denoising()
