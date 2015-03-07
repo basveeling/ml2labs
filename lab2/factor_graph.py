@@ -81,7 +81,7 @@ class Variable(Node):
         """
         # Observed state is represented as a 1-of-N variable
         # Could be 0.0 for sum-product, but log(0.0) = -inf so a tiny value is preferable for max-sum
-        self.observed_state[:] = 0.0000000000001
+        self.observed_state[:] = 0.0001
         self.observed_state[observed_state] = 1.0
 
     def set_latent(self):
@@ -162,7 +162,9 @@ class Variable(Node):
         for receiv_node in receiving_neighbours:
             if receiv_node not in self.in_msgs:
                 raise Exception('did not receive message for node %s' % str(receiv_node))
-
+        # if any([x < 1.0 for x in self.observed_state[:]]):
+        #     msg = np.log(self.observed_state)
+        # else:
         received_msgs = [self.in_msgs.get(n) for n in receiving_neighbours]
 
         if not receiving_neighbours:
@@ -170,13 +172,11 @@ class Variable(Node):
         else:
             summed_msgs = np.add.reduce(received_msgs)
             msg = summed_msgs
-
         msg += np.log(self.observed_state)
-        if self.name.startswith("x"):
-            print msg
         # print "\t Send msg from Var [%s] to Fac [%s] (%s)" % (self.name, other.name, str(msg))
 
         other.receive_msg(self, msg)
+        self.pending.remove(other)
 
 
 class Factor(Node):
@@ -230,27 +230,31 @@ class Factor(Node):
 
     def send_ms_msg(self, other):
         # TODO: implement Factor -> Variable message for max-sum
-        neighbours = set(self.neighbours)
-        receiving_neighbours = neighbours - {other}
-        receiving_i = [self.neighbours.index(n) for n in receiving_neighbours]
 
+        receiving_neighbours = [n for i, n in enumerate(self.neighbours) if n is not other]
+        receiving_i = [self.neighbours.index(n) for n in receiving_neighbours]
+        other_i = self.neighbours.index(other)
         for receiv_node in receiving_neighbours:
             if receiv_node not in self.in_msgs:
                 raise Exception('did not receive message for node %s' % str(receiv_node))
 
         received_msgs = [self.in_msgs.get(n) for n in receiving_neighbours]
 
+        logf = np.log(self.f)
         if not receiving_neighbours:
-            msg = np.log(self.f)
+            msg = logf
         else:
             summed_msgs = np.add.reduce(np.ix_(*received_msgs))
-            summed_msgs_f = np.log(self.f) + summed_msgs
+            summed_msgs = np.expand_dims(summed_msgs, other_i)
+            summed_msgs_f = logf + summed_msgs
 
             msg = np.amax(summed_msgs_f, axis=tuple(receiving_i))
-        if self.name.startswith("f(x"):
-            pass
-        # print "\t Send msg from Fac [ %s] to Var [%s] (%s)" % (self.name, other.name, str(msg))
+            msg -= np.max(msg) # TODO: explain this normalization step!
+        if self.name.startswith("f(x") or self.name.startswith("f_2"):
+            True
+        # print "\t Send msg from Fac [%s] to Var [%s] (%s)" % (self.name, other.name, str(msg))
         other.receive_msg(self, msg)
+        self.pending.remove(other)
 
 
 def send_pending(node):
@@ -302,18 +306,18 @@ def init_network():
     Bronchitis = Variable("Bronchitis", 2)
     Coughing = Variable("Coughing", 2)
     Wheezing = Variable("Wheezing", 2)
-    f_3dim = np.zeros((2, 2, 2))
-    f_3dim[0, 0, 0] = 0.9999
-    f_3dim[0, 0, 1] = 0.0001
-    f_3dim[0, 1, 0] = 0.3
-    f_3dim[0, 1, 1] = 0.7
-    f_3dim[1, 0, 0] = 0.1
-    f_3dim[1, 0, 1] = 0.9
-    f_3dim[1, 1, 0] = 0.01
-    f_3dim[1, 1, 1] = 0.99
+    f_2dim = np.zeros((2, 2, 2))
+    f_2dim[0, 0, 0] = 0.9999
+    f_2dim[0, 0, 1] = 0.0001
+    f_2dim[0, 1, 0] = 0.3
+    f_2dim[0, 1, 1] = 0.7
+    f_2dim[1, 0, 0] = 0.1
+    f_2dim[1, 0, 1] = 0.9
+    f_2dim[1, 1, 0] = 0.01
+    f_2dim[1, 1, 1] = 0.99
     f_0 = Factor("f_0", np.array([[0.999, 0.001], [0.7, 0.3]]), [Influenza, SoreThroat])
     f_1 = Factor("f_1", np.array([[0.95, 0.05], [0.1, 0.9]]), [Influenza, Fever])
-    f_2 = Factor("f_2", f_3dim, [Influenza, Smokes, Bronchitis])
+    f_2 = Factor("f_2", f_2dim, [Influenza, Smokes, Bronchitis])
     f_3 = Factor("f_3", np.array([[0.93, 0.07], [0.2, 0.8]]), [Bronchitis, Coughing])
     f_4 = Factor("f_4", np.array([[0.999, 0.001], [0.4, 0.6]]), [Bronchitis, Wheezing])
     f_5 = Factor("f_5", np.array([0.95, 0.05]), [Influenza])
@@ -363,11 +367,13 @@ def test_ms_product():
     Wheezing.pending.add(f_4)
 
     # Coughing.set_observed(1)
-    # Wheezing.set_observed(1)
-    # Fever.set_observed(0)
-    # SoreThroat.set_observed(1)
-    # Influenza.set_observed(1)
     Smokes.set_observed(1)
+    # Wheezing.set_observed(1)
+    # Fever.set_observed(1)
+    # SoreThroat.set_observed(1)
+    Influenza.set_observed(1)
+    # Bronchitis.set_observed(1)
+    # Smokes.set_observed(1)
     ms_product(node_list)
 
     print_map_state(Influenza)
@@ -382,7 +388,7 @@ def test_ms_product():
 def load_images():
     # Load the image and binarize
     im = np.mean(imread('dalmatian1.png'), axis=2) > 0.5
-    im = im[0:40, 0:40]
+    im #= im[0:100, 0:100]
     # imshow(im)
     # gray()
 
@@ -391,6 +397,8 @@ def load_images():
     noise_im = np.logical_xor(noise, im)
 
     test_im = np.ones((10, 10))
+    # test_im[0:5,0:5] = 1.
+    print test_im
     # test_im[5:8, 3:8] = 1.0
     # test_im[5,5] = 1.0
     # figure()
@@ -416,7 +424,7 @@ def init_image_graph(im):
             y = Variable("y[%d,%d]" % (row, col), 2)
             x = Variable("x[%d,%d]" % (row, col), 2)
 
-            f = np.array([[0.95, 0.05], [0.05, 0.95]])  # TODO: wat moet dit worden?
+            f = np.array([[0.90, 0.1], [0.1, 0.90]])  # TODO: wat moet dit worden?
             # f = np.array([[0.9999, 0.0001], [0.0001, 0.9999]])  # TODO: wat moet dit worden?
 
             factor = Factor("f " + str(row) + "," + str(col), f, [y, x])
@@ -434,13 +442,13 @@ def init_image_graph(im):
 
     for i in range(0, len(xs)):
         graph.append(xs[i])
-        f1 = np.array([[0.5, 0.5], [0.5, 0.5]])  # TODO: wat moet dit worden
+        f1 = np.array([[0.85, 0.15], [0.15, 0.85]])  # TODO: wat moet dit worden
         if (i + 1) % width != 0:
             right_neighbour_factor = Factor("f(%s->%s)" % (xs[i].name, xs[i + 1].name), f1, [xs[i], xs[i + 1]])
             graph.append(right_neighbour_factor)
             xx_factors.append(right_neighbour_factor)
             # Initialize a message to the left:
-            xs[i].in_msgs[right_neighbour_factor] = np.array([np.log(.5), np.log(.5)])
+            xs[i].in_msgs[right_neighbour_factor] = np.array([np.log(1.), np.log(1.)])
             xs[i].pending.add(right_neighbour_factor)
 
         if i < (height - 1) * width:
@@ -448,13 +456,9 @@ def init_image_graph(im):
             graph.append(down_neighbour_factor)
             xx_factors.append(down_neighbour_factor)
             # Initialize a message upwards:
-            xs[i].in_msgs[down_neighbour_factor] = np.array([np.log(.5), np.log(.5)])
+            xs[i].in_msgs[down_neighbour_factor] = np.array([np.log(1.), np.log(1.)])
             xs[i].pending.add(down_neighbour_factor)
 
-    # xs[0].pending.add(xx_factors[0])
-    # xs[0].pending.add(xx_factors[1])
-    # xs[0].in_msgs[xx_factors[0]] = np.array([np.log(1), np.log(1)])
-    # xs[0].in_msgs[xx_factors[1]] = np.array([np.log(1), np.log(1)])
     return graph, xs, ys
 
 
@@ -479,8 +483,11 @@ def save_image(im, name):
 def run_denoising(noise_im, im):
     graph, xs, ys = init_image_graph(noise_im)
     print "starting algorithm..."
-    for i in range(100):
+    for i in range(4):
         for node in graph:
+            # print "- " + node.name
+            send_pending_ms(node)
+        for node in graph[::-1]:
             # print "- " + node.name
             send_pending_ms(node)
         print "----- NEXT RUN (%d) ------" % (i + 1)
@@ -502,7 +509,5 @@ def test_image_denoising():
 
 
 if __name__ == '__main__':
-    # try:
     test_image_denoising()
-    # except:
-    # print "doei"
+    # test_ms_product()
