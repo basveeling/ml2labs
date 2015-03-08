@@ -326,6 +326,7 @@ def init_network():
 
 
 def test_sum_product():
+    print "--- Marginals for all variables with Sum-Product and no observed variables ---"
     Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
     f_6 = init_network()
 
@@ -339,8 +340,8 @@ def test_sum_product():
     Coughing.pending.add(f_3)
     Wheezing.pending.add(f_4)
 
-    Bronchitis.set_observed(1)
-    Influenza.set_observed(0)
+    # Bronchitis.set_observed(1)
+    # Influenza.set_observed(0)
 
     sum_product(node_list)
 
@@ -352,8 +353,38 @@ def test_sum_product():
     print_marginal(SoreThroat)
     print_marginal(Smokes)
 
+def test_sum_product_with_observed():
+    print "--- Sum Product with observed not smoking but coughing and wheezing"
+    Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
+    f_6 = init_network()
+
+    # prior factors
+    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
+                 Bronchitis]
+    f_5.pending.add(Influenza)
+    f_6.pending.add(Smokes)
+    SoreThroat.pending.add(f_0)
+    Fever.pending.add(f_1)
+    Coughing.pending.add(f_3)
+    Wheezing.pending.add(f_4)
+
+    Smokes.set_observed(0)
+    Coughing.set_observed(1)
+    Wheezing.set_observed(1)
+
+
+    sum_product(node_list)
+
+    print_marginal(Influenza)
+    print_marginal(Bronchitis)
+    print_marginal(Coughing)
+    print_marginal(Wheezing)
+    print_marginal(Fever)
+    print_marginal(SoreThroat)
+    print_marginal(Smokes)
 
 def test_ms_product():
+    print "--- MAP states for all variables with Max-Sum and no observed variables ---"
     Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
     f_6 = init_network()
     node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
@@ -367,11 +398,11 @@ def test_ms_product():
     Wheezing.pending.add(f_4)
 
     # Coughing.set_observed(1)
-    Smokes.set_observed(1)
+    # Smokes.set_observed(1)
     # Wheezing.set_observed(1)
     # Fever.set_observed(1)
     # SoreThroat.set_observed(1)
-    Influenza.set_observed(1)
+    # Influenza.set_observed(1)
     # Bronchitis.set_observed(1)
     # Smokes.set_observed(1)
     ms_product(node_list)
@@ -384,31 +415,48 @@ def test_ms_product():
     print_map_state(SoreThroat)
     print_map_state(Smokes)
 
+def test_ms_product_with_observed():
+    print "--- MAP states for all variables with Max-Sum and observed non smoking but coughing and wheezing ---"
+    Bronchitis, Coughing, Fever, Influenza, Smokes, SoreThroat, Wheezing, f_0, f_1, f_2, f_3, f_4, f_5, \
+    f_6 = init_network()
+    node_list = [f_5, f_6, Smokes, SoreThroat, Fever, f_0, f_1, Influenza, f_2, Coughing, f_3, Wheezing, f_4,
+                 Bronchitis]
+
+    f_5.pending.add(Influenza)
+    f_6.pending.add(Smokes)
+    SoreThroat.pending.add(f_0)
+    Fever.pending.add(f_1)
+    Coughing.pending.add(f_3)
+    Wheezing.pending.add(f_4)
+
+    Coughing.set_observed(1)
+    Smokes.set_observed(0)
+    Wheezing.set_observed(1)
+
+    ms_product(node_list)
+
+    print_map_state(Influenza)
+    print_map_state(Bronchitis)
+    print_map_state(Coughing)
+    print_map_state(Wheezing)
+    print_map_state(Fever)
+    print_map_state(SoreThroat)
+    print_map_state(Smokes)
 
 def load_images():
     # Load the image and binarize
     im = np.mean(imread('dalmatian1.png'), axis=2) > 0.5
-    im #= im[0:100, 0:100]
-    # imshow(im)
-    # gray()
 
     # Add some noise
     noise = np.random.rand(*im.shape) > 0.9
     noise_im = np.logical_xor(noise, im)
 
     test_im = np.ones((10, 10))
-    # test_im[0:5,0:5] = 1.
-    print test_im
-    # test_im[5:8, 3:8] = 1.0
-    # test_im[5,5] = 1.0
-    # figure()
-    # imshow(test_im)
+
 
     # Add some noise
     noise = np.random.rand(*test_im.shape) > 0.9
     noise_test_im = np.logical_xor(noise, test_im)
-    # figure()
-    # imshow(noise_test_im)
     return im, noise_im, test_im, noise_test_im
 
 
@@ -424,9 +472,7 @@ def init_image_graph(im):
             y = Variable("y[%d,%d]" % (row, col), 2)
             x = Variable("x[%d,%d]" % (row, col), 2)
 
-            f = np.array([[0.90, 0.1], [0.1, 0.90]])  # TODO: wat moet dit worden?
-            # f = np.array([[0.9999, 0.0001], [0.0001, 0.9999]])  # TODO: wat moet dit worden?
-
+            f = np.array([[0.90, 0.1], [0.1, 0.90]])
             factor = Factor("f " + str(row) + "," + str(col), f, [y, x])
 
             y.set_observed(im[row, col])
@@ -481,6 +527,7 @@ def save_image(im, name):
 
 
 def run_denoising(noise_im, im):
+    print "--- Running Image Denoising ---"
     graph, xs, ys = init_image_graph(noise_im)
     print "starting algorithm..."
     for i in range(4):
@@ -492,11 +539,8 @@ def run_denoising(noise_im, im):
             send_pending_ms(node)
         print "----- NEXT RUN (%d) ------" % (i + 1)
         new_img = create_map_im(im.shape, xs)
-        save_image(new_img, "iters/im_%d" % i)
-    print new_img
-    print im
-    print noise_im
-    # new_img = create_map_im(im.shape, xs)
+
+    print "--- Saving Images ---"
     save_image(im, "im")
     save_image(noise_im, "noise_im")
     save_image(new_img, "new_img")
@@ -509,5 +553,9 @@ def test_image_denoising():
 
 
 if __name__ == '__main__':
+    test_sum_product()
+    test_sum_product_with_observed()
+    test_ms_product()
+    test_ms_product_with_observed()
     test_image_denoising()
     # test_ms_product()
